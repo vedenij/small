@@ -1,0 +1,202 @@
+syntax = "proto3";
+package inference.inference;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/productscience/inference/x/inference/types";
+
+// Params defines the parameters for the module.
+message Params {
+  option (amino.name) = "inference/x/inference/Params";
+  option (gogoproto.equal) = true;
+  EpochParams epoch_params = 1;
+  ValidationParams validation_params = 2;
+  PocParams poc_params = 3;
+  TokenomicsParams tokenomics_params = 4;
+  CollateralParams collateral_params = 5;
+  BitcoinRewardParams bitcoin_reward_params = 6;
+  DynamicPricingParams dynamic_pricing_params = 7;
+  BandwidthLimitsParams bandwidth_limits_params = 8;
+}
+
+message GenesisOnlyParams {
+  int64 total_supply = 1;
+  int64 originator_supply = 2;
+  int64 top_reward_amount = 3;
+  int64 standard_reward_amount = 4;
+  int64 pre_programmed_sale_amount = 5;
+  int32 top_rewards = 6;
+  string supply_denom = 7;
+  int64 top_reward_period = 8;
+  int64 top_reward_payouts = 9;
+  int64 top_reward_payouts_per_miner = 10;
+  int64 top_reward_max_duration = 11;
+  Decimal max_individual_power_percentage = 12;
+  bool genesis_guardian_enabled = 13;
+  int64 genesis_guardian_network_maturity_threshold = 14;
+  Decimal genesis_guardian_multiplier = 15;
+  repeated string genesis_guardian_addresses = 16;
+}
+
+message TokenomicsParams {
+  option (gogoproto.equal) = true;
+  Decimal subsidy_reduction_interval = 1;
+  Decimal subsidy_reduction_amount = 2;
+  Decimal current_subsidy_percentage = 3;
+  Decimal top_reward_allowed_failure = 4;
+  int64 top_miner_poc_qualification = 5;
+  uint64 work_vesting_period = 6;
+  uint64 reward_vesting_period = 7;
+  uint64 top_miner_vesting_period = 8;
+}
+
+message EpochParams {
+  option (gogoproto.equal) = true;
+  int64 epoch_length = 1;
+  int64 epoch_multiplier = 2;
+  int64 epoch_shift = 3;
+  int64 default_unit_of_compute_price = 4;
+  int64 poc_stage_duration = 5;
+  int64 poc_exchange_duration = 6;
+  int64 poc_validation_delay = 7;
+  int64 poc_validation_duration = 8;
+  int64 set_new_validators_delay = 9;
+  int64 inference_validation_cutoff = 10;
+  uint64 inference_pruning_epoch_threshold = 11;
+  int64 inference_pruning_max = 12;
+  int64 poc_pruning_max = 13;
+}
+
+message ValidationParams {
+  option (gogoproto.equal) = true;
+  Decimal false_positive_rate = 1;
+  int32  min_ramp_up_measurements = 2;
+  Decimal pass_value = 3;
+  Decimal min_validation_average = 4;
+  Decimal max_validation_average = 5;
+  int64  expiration_blocks = 6;
+  int64  epochs_to_max = 7;
+  int64  full_validation_traffic_cutoff = 8;
+  Decimal  min_validation_halfway = 9;
+  int64  min_validation_traffic_cutoff = 10;
+  Decimal miss_percentage_cutoff = 11;
+  Decimal miss_requests_penalty = 12;
+  int64  timestamp_expiration = 13;  // Max time in seconds until timestamps are "too old"
+  int64  timestamp_advance = 14;     // Max time in seconds until timestamps are "in the future"
+  uint64 estimated_limits_per_block_kb = 15; // Max estimated KB per block per Transfer Agent
+}
+
+message PocParams {
+  option (gogoproto.equal) = true;
+  int32 default_difficulty = 1;
+  int32 validation_sample_size = 2;
+  uint64 poc_data_pruning_epoch_threshold = 3;
+}
+
+message Decimal {
+  option (gogoproto.equal) = true;
+  int64 value = 1;
+  int32 exponent = 2;
+}
+
+// CollateralParams defines the parameters for collateral slashing.
+message CollateralParams {
+  option (gogoproto.equal) = true;
+
+  // slash_fraction_invalid is the percentage of collateral to slash when a participant is marked INVALID.
+  Decimal slash_fraction_invalid = 1;
+
+  // slash_fraction_downtime is the percentage of collateral to slash for downtime.
+  Decimal slash_fraction_downtime = 2;
+
+  // downtime_missed_percentage_threshold is the missed request percentage that triggers a downtime slash.
+  Decimal downtime_missed_percentage_threshold = 3;
+
+  uint64 grace_period_end_epoch = 4;
+
+  // BaseWeightRatio is the portion of potential weight granted unconditionally (0-1)
+  Decimal base_weight_ratio = 5;
+
+  // CollateralPerWeightUnit is the amount of collateral required per unit of weight
+  Decimal collateral_per_weight_unit = 6;
+}
+
+// BitcoinRewardParams defines the parameters for Bitcoin-style reward system.
+message BitcoinRewardParams {
+  option (gogoproto.equal) = true;
+
+  // use_bitcoin_rewards enables/disables the Bitcoin-style reward system (default: true for production, false for safe deployment)
+  bool use_bitcoin_rewards = 1;
+
+  // initial_epoch_reward is the base reward amount per epoch (in native tokens)
+  uint64 initial_epoch_reward = 2;
+
+  // decay_rate is the exponential decay rate per epoch for reward halving
+  Decimal decay_rate = 3;
+
+  // genesis_epoch is the starting epoch for Bitcoin-style calculations
+  uint64 genesis_epoch = 4;
+
+  // utilization_bonus_factor controls bonus multipliers for high-demand models (Phase 2)
+  Decimal utilization_bonus_factor = 5;
+
+  // full_coverage_bonus_factor is the multiplier for participants supporting all governance models (Phase 2)
+  Decimal full_coverage_bonus_factor = 6;
+
+  // partial_coverage_bonus_factor is the scaling factor for partial model coverage (Phase 2)
+  Decimal partial_coverage_bonus_factor = 7;
+}
+
+// DynamicPricingParams defines the parameters for the dynamic pricing system.
+message DynamicPricingParams {
+  option (gogoproto.equal) = true;
+
+  // stability_zone_lower_bound is the lower bound of the stability zone where price doesn't change (0-1)
+  Decimal stability_zone_lower_bound = 1;
+
+  // stability_zone_upper_bound is the upper bound of the stability zone where price doesn't change (0-1)
+  Decimal stability_zone_upper_bound = 2;
+
+  // price_elasticity controls price adjustment magnitude - determines maximum change at maximum utilization deviation (0-1)
+  Decimal price_elasticity = 3;
+
+  // utilization_window_duration is the time window in seconds for utilization calculation
+  uint64 utilization_window_duration = 4;
+
+  // min_per_token_price is the minimum per-token price floor to prevent zero pricing (in native token units)
+  uint64 min_per_token_price = 5;
+
+  // base_per_token_price is the initial per-token price after grace period (in native token units)
+  uint64 base_per_token_price = 6;
+
+  // grace_period_end_epoch is the epoch when free inference period ends
+  uint64 grace_period_end_epoch = 7;
+  // grace_period_per_token_price is the per-token price during grace period (default 0 for free)
+  uint64 grace_period_per_token_price = 8;
+}
+
+// BandwidthLimitsParams defines the parameters for request bandwidth limitations.
+message BandwidthLimitsParams {
+  option (gogoproto.equal) = true;
+
+  // estimated_limits_per_block_kb is the maximum KB per block that can be consumed
+  uint64 estimated_limits_per_block_kb = 1;
+
+  // kb_per_input_token is the estimated KB per input token
+  Decimal kb_per_input_token = 2;
+
+  // kb_per_output_token is the estimated KB per output token
+  Decimal kb_per_output_token = 3;
+
+  // The total max simultaneous invalidations across the chain
+  uint64 invalidations_limit = 4;
+
+  // The seconds to look back to determine inference rate for invalidations
+  uint64 invalidations_sample_period = 5;
+
+  // The curve for the tanh function for determining how quickly traffic expands the
+  // max invalidations allowed
+  uint64 invalidations_limit_curve = 6;
+}
