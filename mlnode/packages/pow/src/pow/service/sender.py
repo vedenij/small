@@ -59,6 +59,7 @@ class Sender(Process):
                 response = requests.post(
                     f"{self.url}/generated",
                     json=batch.__dict__,
+                    timeout=10,  # 10 second timeout
                 )
                 response.raise_for_status()
                 logger.info(
