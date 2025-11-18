@@ -1,0 +1,12 @@
+# Local development override - builds image from local files
+# Use this instead of pulling from GitHub registry
+
+services:
+  mlnode-308:
+    build:
+      context: ../../mlnode
+      dockerfile: packages/api/Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: smallmlnode:local
+    # All other settings inherited from docker-compose.mlnode.yml
