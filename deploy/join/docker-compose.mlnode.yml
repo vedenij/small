@@ -1,12 +1,13 @@
 services:
   mlnode-308:
-    image: ghcr.io/vedenij/mlnode:3.0.11
+    image: ghcr.io/vedenij/smallmlnode:3.0.11
     hostname: mlnode-308
     volumes:
       - ${HF_HOME:-${HOME}/.cache}:/root/.cache
     environment:
       - HF_HOME=/root/.cache
       - VLLM_ATTENTION_BACKEND=FLASHINFER
+      - DELEGATION_ENABLED=${DELEGATION_ENABLED:-0}
       - DELEGATION_URL=${DELEGATION_URL:-}
       - DELEGATION_AUTH_TOKEN=${DELEGATION_AUTH_TOKEN:-}
     deploy:

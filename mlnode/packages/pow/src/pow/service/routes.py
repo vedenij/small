@@ -65,8 +65,7 @@ async def init_validate(
     init_request: PowInitRequestUrl
 ):
     # Validation not supported in delegation mode
-    delegation_url = os.getenv("DELEGATION_URL") or init_request.delegation_url
-    if delegation_url:
+    if os.getenv("DELEGATION_ENABLED", "0") == "1":
         raise HTTPException(
             status_code=400,
             detail="Validation phase not supported in delegation mode"

@@ -6,7 +6,7 @@ set -e
 
 VERSION=${1:-"3.0.11"}
 GITHUB_USER="vedenij"
-IMAGE_NAME="mlnode"
+IMAGE_NAME="smallmlnode"
 FULL_IMAGE="ghcr.io/${GITHUB_USER}/${IMAGE_NAME}:${VERSION}"
 
 echo "============================================"

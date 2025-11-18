@@ -70,16 +70,29 @@ class PowManager(IManager):
     ):
         self.init_request = init_request
 
-        # Read delegation parameters from environment (priority) or request (fallback)
-        delegation_url = os.getenv("DELEGATION_URL") or init_request.delegation_url
-        delegation_auth_token = os.getenv("DELEGATION_AUTH_TOKEN") or init_request.delegation_auth_token
+        # Check if delegation mode is explicitly enabled
+        delegation_enabled = os.getenv("DELEGATION_ENABLED", "0") == "1"
 
-        # Check if delegation mode is enabled
-        if delegation_url and delegation_auth_token:
+        if delegation_enabled:
+            # Read delegation parameters from environment (priority) or request (fallback)
+            delegation_url = os.getenv("DELEGATION_URL") or init_request.delegation_url
+            delegation_auth_token = os.getenv("DELEGATION_AUTH_TOKEN") or init_request.delegation_auth_token
+
+            # Validate that required parameters are set
+            if not delegation_url:
+                raise ValueError(
+                    "DELEGATION_ENABLED=1 but DELEGATION_URL is not set. "
+                    "Please set DELEGATION_URL in config.env"
+                )
+            if not delegation_auth_token:
+                raise ValueError(
+                    "DELEGATION_ENABLED=1 but DELEGATION_AUTH_TOKEN is not set. "
+                    "Please set DELEGATION_AUTH_TOKEN in config.env"
+                )
+
             logger.info(
                 f"Initializing in DELEGATION mode: "
-                f"delegation_url={delegation_url} "
-                f"(source: {'env' if os.getenv('DELEGATION_URL') else 'request'})"
+                f"delegation_url={delegation_url}"
             )
 
             # Create delegation request
