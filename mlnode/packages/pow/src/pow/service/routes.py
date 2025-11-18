@@ -63,6 +63,13 @@ async def init_validate(
     request: Request,
     init_request: PowInitRequestUrl
 ):
+    # Validation not supported in delegation mode
+    if init_request.delegation_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Validation phase not supported in delegation mode"
+        )
+
     manager: PowManager = request.app.state.pow_manager
     if not manager.is_running():
         manager.switch_to_pow(init_request)
@@ -106,6 +113,14 @@ async def start_generate(request: Request):
 )
 async def start_validate(request: Request):
     manager: PowManager = request.app.state.pow_manager
+
+    # Validation not supported in delegation mode
+    if manager._using_delegation:
+        raise HTTPException(
+            status_code=400,
+            detail="Validation phase not supported in delegation mode"
+        )
+
     if not manager.is_running():
         raise HTTPException(
             status_code=400,
@@ -127,6 +142,14 @@ async def validate(
     proof_batch: ProofBatch = Body(...)
 ):
     manager: PowManager = request.app.state.pow_manager
+
+    # Validation not supported in delegation mode
+    if manager._using_delegation:
+        raise HTTPException(
+            status_code=400,
+            detail="Validation not supported in delegation mode"
+        )
+
     if not manager.is_running():
         raise HTTPException(
             status_code=400,
