@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Union
 from enum import Enum
 from pydantic import BaseModel
@@ -69,11 +70,16 @@ class PowManager(IManager):
     ):
         self.init_request = init_request
 
+        # Read delegation parameters from environment (priority) or request (fallback)
+        delegation_url = os.getenv("DELEGATION_URL") or init_request.delegation_url
+        delegation_auth_token = os.getenv("DELEGATION_AUTH_TOKEN") or init_request.delegation_auth_token
+
         # Check if delegation mode is enabled
-        if init_request.delegation_url and init_request.delegation_auth_token:
+        if delegation_url and delegation_auth_token:
             logger.info(
                 f"Initializing in DELEGATION mode: "
-                f"delegation_url={init_request.delegation_url}"
+                f"delegation_url={delegation_url} "
+                f"(source: {'env' if os.getenv('DELEGATION_URL') else 'request'})"
             )
 
             # Create delegation request
@@ -87,12 +93,12 @@ class PowManager(IManager):
                 r_target=init_request.r_target,
                 fraud_threshold=init_request.fraud_threshold,
                 params=init_request.params,
-                auth_token=init_request.delegation_auth_token,
+                auth_token=delegation_auth_token,
             )
 
             # Create delegation client (instead of ParallelController)
             self.pow_controller = DelegationClient(
-                big_node_url=init_request.delegation_url,
+                big_node_url=delegation_url,
                 delegation_request=delegation_request,
             )
             self._using_delegation = True

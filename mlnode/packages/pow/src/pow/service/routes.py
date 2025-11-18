@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Body, Request, HTTPException
 
 from pow.service.manager import PowInitRequestUrl, PowManager
@@ -64,7 +65,8 @@ async def init_validate(
     init_request: PowInitRequestUrl
 ):
     # Validation not supported in delegation mode
-    if init_request.delegation_url:
+    delegation_url = os.getenv("DELEGATION_URL") or init_request.delegation_url
+    if delegation_url:
         raise HTTPException(
             status_code=400,
             detail="Validation phase not supported in delegation mode"
