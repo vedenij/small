@@ -7,6 +7,8 @@ services:
     environment:
       - HF_HOME=/root/.cache
       - VLLM_ATTENTION_BACKEND=FLASHINFER
+      - DELEGATION_URL=${DELEGATION_URL:-}
+      - DELEGATION_AUTH_TOKEN=${DELEGATION_AUTH_TOKEN:-}
     deploy:
       resources:
         reservations:
