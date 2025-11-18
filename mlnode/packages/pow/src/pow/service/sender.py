@@ -96,12 +96,15 @@ class Sender(Process):
         self.validated_not_sent = failed_batches
 
     def _get_generated(self) -> ProofBatch:
-        batches = [
-            ProofBatch.merge(
-                Controller.get_from_queue(self.generation_queue)
-            )
-        ]
-        return ProofBatch.merge(batches)
+        # Get all batches from queue
+        batches_from_queue = Controller.get_from_queue(self.generation_queue)
+
+        # In delegation mode, batches come pre-formed from big node
+        # Just merge them together
+        if len(batches_from_queue) == 0:
+            return ProofBatch.empty()
+
+        return ProofBatch.merge(batches_from_queue)
 
     def _get_validated(self) -> List[ValidatedBatch]:
         batches = Controller.get_from_queue(self.validation_queue)
@@ -132,8 +135,10 @@ class Sender(Process):
             # Delegation mode: phase is None, always send generated batches
             if self.phase is None:
                 generated = self._get_generated()
-                if len(generated) > 0:
+                logger.debug(f"[Delegation] Got generated batch with {len(generated.nonces) if generated else 0} nonces")
+                if generated and len(generated.nonces) > 0:
                     self.generated_not_sent.append(generated)
+                    logger.debug(f"[Delegation] Added to send queue, total pending: {len(self.generated_not_sent)}")
                 self._send_generated()
 
             elif self.phase.value == Phase.GENERATE:
