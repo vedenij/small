@@ -118,7 +118,14 @@ class Sender(Process):
     def run(self):
         logger.info("Sender started")
         while not self.stop_event.is_set():
-            if self.phase.value == Phase.GENERATE:
+            # Delegation mode: phase is None, always send generated batches
+            if self.phase is None:
+                generated = self._get_generated()
+                if len(generated) > 0:
+                    self.generated_not_sent.append(generated)
+                self._send_generated()
+
+            elif self.phase.value == Phase.GENERATE:
                 generated = self._get_generated()
                 if len(generated) > 0:
                     self.generated_not_sent.append(generated)
