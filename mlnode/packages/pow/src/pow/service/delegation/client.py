@@ -185,12 +185,15 @@ class DelegationClient:
 
                 # Put batches into queue
                 if batch_response.batches:
+                    total_nonces = 0
                     for batch in batch_response.batches:
                         self.generated_batch_queue.put(batch)
+                        total_nonces += len(batch.nonces)
 
                     logger.info(
-                        f"Received {len(batch_response.batches)} batches, "
-                        f"total generated: {batch_response.total_batches_generated}"
+                        f"📦 Received {len(batch_response.batches)} batches from big node: "
+                        f"total_nonces={total_nonces}, "
+                        f"total_generated={batch_response.total_batches_generated}"
                     )
 
                 # Check session status

@@ -50,16 +50,27 @@ class Sender(Process):
 
         for batch in self.generated_not_sent:
             try:
-                logger.info(f"Sending generated batch to {self.url}")
+                num_nonces = len(batch.nonces)
+                logger.info(
+                    f"Sending generated batch to {self.url}: "
+                    f"node_id={batch.node_id}, block_height={batch.block_height}, "
+                    f"nonces={num_nonces}"
+                )
                 response = requests.post(
                     f"{self.url}/generated",
                     json=batch.__dict__,
                 )
                 response.raise_for_status()
-                logger.info("Successfully sent generated batch")
+                logger.info(
+                    f"✓ Successfully sent batch: node_id={batch.node_id}, "
+                    f"nonces={num_nonces}, status={response.status_code}"
+                )
             except RequestException as e:
                 failed_batches.append(batch)
-                logger.error(f"Error sending generated batch to {self.url}: {e}")
+                logger.error(
+                    f"✗ Failed to send batch: node_id={batch.node_id}, "
+                    f"nonces={len(batch.nonces)}, error={e}"
+                )
 
         self.generated_not_sent = failed_batches
 
