@@ -8,7 +8,7 @@ import time
 import threading
 import requests
 from typing import Optional
-from queue import Queue
+import torch.multiprocessing as mp
 
 from pow.data import ProofBatch
 from pow.service.delegation.types import (
@@ -60,7 +60,8 @@ class DelegationClient:
         self.big_node_url = big_node_url.rstrip('/')
         self.delegation_request = delegation_request
         self.session_id: Optional[str] = None
-        self.generated_batch_queue: Queue = Queue()
+        # Use multiprocessing Queue for inter-process communication with Sender
+        self.generated_batch_queue = mp.Queue()
 
         self._running = False
         self._poll_thread: Optional[threading.Thread] = None
