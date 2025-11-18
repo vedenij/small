@@ -20,7 +20,6 @@ from common.logger import create_logger
 logger = create_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/delegation",
     tags=["Delegation API"],
 )
 
