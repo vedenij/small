@@ -134,11 +134,13 @@ class Sender(Process):
         while not self.stop_event.is_set():
             # Delegation mode: phase is None, always send generated batches
             if self.phase is None:
+                logger.info(f"[DELEGATION MODE] Checking queue (qsize: {self.generation_queue.qsize()})")
                 generated = self._get_generated()
-                logger.debug(f"[Delegation] Got generated batch with {len(generated.nonces) if generated else 0} nonces")
-                if generated and len(generated.nonces) > 0:
+                num_nonces = len(generated.nonces) if generated else 0
+                logger.info(f"[DELEGATION MODE] Got generated batch with {num_nonces} nonces")
+                if generated and num_nonces > 0:
                     self.generated_not_sent.append(generated)
-                    logger.debug(f"[Delegation] Added to send queue, total pending: {len(self.generated_not_sent)}")
+                    logger.info(f"[DELEGATION MODE] Added to send queue, total pending: {len(self.generated_not_sent)}")
                 self._send_generated()
 
             elif self.phase.value == Phase.GENERATE:
