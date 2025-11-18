@@ -24,7 +24,8 @@ from common.logger import create_logger
 logger = create_logger(__name__)
 
 # Poll interval in seconds
-POLL_INTERVAL = 5
+# Reduced from 5s to 1s for faster batch delivery to blockchain
+POLL_INTERVAL = 1
 
 
 class DelegationClient:
@@ -67,6 +68,7 @@ class DelegationClient:
         self._poll_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
         self._gpu_count = 0
+        self._stopped_normally = False  # Track if stopped due to session completion
 
         logger.info(
             f"DelegationClient initialized: big_node_url={big_node_url}, "
@@ -199,11 +201,13 @@ class DelegationClient:
 
                 # Check session status
                 if not batch_response.session_active:
-                    logger.warning(
-                        f"Session no longer active: status={batch_response.status}"
+                    logger.info(
+                        f"Session completed normally: status={batch_response.status}, "
+                        f"total_batches={batch_response.total_batches_generated}"
                     )
                     with self._lock:
                         self._running = False
+                        self._stopped_normally = True  # Normal completion
                     break
 
                 # Reset error counter on success
@@ -253,12 +257,13 @@ class DelegationClient:
         Check if delegation client is alive.
 
         Provides interface compatibility with ParallelController.
-        For delegation client, alive means running.
+        For delegation client, alive means running OR stopped normally.
 
         Returns:
-            True if alive
+            True if alive (running or completed successfully)
         """
-        return self.is_running()
+        with self._lock:
+            return self._running or self._stopped_normally
 
     def start_generate(self) -> None:
         """

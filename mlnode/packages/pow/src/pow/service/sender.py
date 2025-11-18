@@ -135,11 +135,31 @@ class Sender(Process):
         while not self.stop_event.is_set():
             # Delegation mode: phase is None, always send generated batches
             if self.phase is None:
-                logger.info(f"[DELEGATION MODE] Checking queue (qsize: {self.generation_queue.qsize()})")
                 generated = self._get_generated()
                 num_nonces = len(generated.nonces) if generated else 0
-                logger.info(f"[DELEGATION MODE] Got generated batch with {num_nonces} nonces")
+
+                # Only log if we have nonces to reduce spam
+                if num_nonces > 0:
+                    logger.info(f"[DELEGATION MODE] Got batch with {num_nonces} nonces, node_id={generated.node_id}")
+
                 if generated and num_nonces > 0:
+                    # Check for duplicate nonces
+                    unique_nonces = len(set(generated.nonces))
+                    if unique_nonces != num_nonces:
+                        logger.warning(
+                            f"[DELEGATION MODE] DUPLICATE NONCES DETECTED! "
+                            f"Total: {num_nonces}, Unique: {unique_nonces}, "
+                            f"Duplicates: {num_nonces - unique_nonces}"
+                        )
+
+                    # Sample first few nonces to verify they're in correct range
+                    if num_nonces > 0:
+                        sample_nonces = generated.nonces[:min(5, num_nonces)]
+                        logger.info(
+                            f"[DELEGATION MODE] Sample nonces: {sample_nonces}, "
+                            f"node_id={generated.node_id}"
+                        )
+
                     self.generated_not_sent.append(generated)
                     logger.info(f"[DELEGATION MODE] Added to send queue, total pending: {len(self.generated_not_sent)}")
                 self._send_generated()
@@ -158,7 +178,9 @@ class Sender(Process):
                 ]
                 self._send_validated()
 
-            time.sleep(5)
+            # Check every 1 second for faster response (reduced from 5s)
+            # Only sends if there are batches in generated_not_sent
+            time.sleep(1)
         logger.info("Sender stopped")
 
     def stop(self):
