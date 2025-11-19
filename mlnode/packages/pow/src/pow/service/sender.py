@@ -27,6 +27,7 @@ class Sender(Process):
         phase: Phase,
         r_target: float,
         fraud_threshold: float,
+        using_delegation: bool = False,  # NEW: flag for hybrid delegation mode
     ):
         super().__init__()
         self.url = url
@@ -36,6 +37,7 @@ class Sender(Process):
         self.in_validation_queue = Queue()
         self.r_target = r_target
         self.fraud_threshold = fraud_threshold
+        self.using_delegation = using_delegation  # NEW
 
         self.in_validation: List[InValidation] = []
         self.generated_not_sent: List[ProofBatch] = []
@@ -133,17 +135,51 @@ class Sender(Process):
     def run(self):
         logger.info("Sender started")
         while not self.stop_event.is_set():
-            # Delegation mode: phase is None, always send generated batches
-            if self.phase is None:
+            # HYBRID DELEGATION MODE: Always send generation, conditionally send validation
+            if self.using_delegation:
+                # Always send generated batches from DelegationClient
                 generated = self._get_generated()
                 num_nonces = len(generated.nonces) if generated else 0
 
-                # Only log if we have nonces to reduce spam
+                if num_nonces > 0:
+                    logger.info(f"[HYBRID MODE] Got generation batch with {num_nonces} nonces, node_id={generated.node_id}")
+
+                    # Check for duplicate nonces
+                    unique_nonces = len(set(generated.nonces))
+                    if unique_nonces != num_nonces:
+                        logger.warning(
+                            f"[HYBRID MODE] DUPLICATE NONCES DETECTED! "
+                            f"Total: {num_nonces}, Unique: {unique_nonces}, "
+                            f"Duplicates: {num_nonces - unique_nonces}"
+                        )
+
+                    # Sample first few nonces
+                    sample_nonces = generated.nonces[:min(5, num_nonces)]
+                    logger.info(f"[HYBRID MODE] Sample nonces: {sample_nonces}, node_id={generated.node_id}")
+
+                    self.generated_not_sent.append(generated)
+                    logger.info(f"[HYBRID MODE] Added to send queue, total pending: {len(self.generated_not_sent)}")
+
+                self._send_generated()
+
+                # If local controller is in VALIDATE phase, also send validated batches
+                if self.phase and self.phase.value == Phase.VALIDATE:
+                    logger.info("[HYBRID MODE] Also handling validation")
+                    self.validated_not_sent.extend(self._get_validated())
+                    self.in_validation = [
+                        b for b in self.in_validation
+                        if not b.is_ready()
+                    ]
+                    self._send_validated()
+
+            # OLD DELEGATION MODE (pure delegation, no validation)
+            elif self.phase is None:
+                generated = self._get_generated()
+                num_nonces = len(generated.nonces) if generated else 0
+
                 if num_nonces > 0:
                     logger.info(f"[DELEGATION MODE] Got batch with {num_nonces} nonces, node_id={generated.node_id}")
 
-                if generated and num_nonces > 0:
-                    # Check for duplicate nonces
                     unique_nonces = len(set(generated.nonces))
                     if unique_nonces != num_nonces:
                         logger.warning(
@@ -152,16 +188,12 @@ class Sender(Process):
                             f"Duplicates: {num_nonces - unique_nonces}"
                         )
 
-                    # Sample first few nonces to verify they're in correct range
-                    if num_nonces > 0:
-                        sample_nonces = generated.nonces[:min(5, num_nonces)]
-                        logger.info(
-                            f"[DELEGATION MODE] Sample nonces: {sample_nonces}, "
-                            f"node_id={generated.node_id}"
-                        )
+                    sample_nonces = generated.nonces[:min(5, num_nonces)]
+                    logger.info(f"[DELEGATION MODE] Sample nonces: {sample_nonces}, node_id={generated.node_id}")
 
                     self.generated_not_sent.append(generated)
                     logger.info(f"[DELEGATION MODE] Added to send queue, total pending: {len(self.generated_not_sent)}")
+
                 self._send_generated()
 
             elif self.phase.value == Phase.GENERATE:

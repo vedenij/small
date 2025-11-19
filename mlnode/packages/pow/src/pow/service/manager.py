@@ -49,6 +49,7 @@ class PowManager(IManager):
     def __init__(self):
         super().__init__()
         self.pow_controller: Optional[Union[ParallelController, DelegationClient]] = None
+        self.local_controller: Optional[ParallelController] = None  # For validation in delegation mode
         self.pow_sender: Optional[Sender] = None
         self.init_request: Optional[PowInitRequest] = None
         self._using_delegation: bool = False
@@ -109,21 +110,36 @@ class PowManager(IManager):
                 auth_token=delegation_auth_token,
             )
 
-            # Create delegation client (instead of ParallelController)
+            # Create delegation client for generation
             self.pow_controller = DelegationClient(
                 big_node_url=delegation_url,
                 delegation_request=delegation_request,
             )
             self._using_delegation = True
 
-            # Create sender (uses delegation client's queue)
+            # Create LOCAL controller for validation (on small node's GPU)
+            logger.info("Creating local ParallelController for validation")
+            self.local_controller = ParallelController(
+                params=init_request.params,
+                block_hash=init_request.block_hash,
+                block_height=init_request.block_height,
+                public_key=init_request.public_key,
+                node_id=init_request.node_id,
+                node_count=init_request.node_count,
+                batch_size=init_request.batch_size,
+                r_target=init_request.r_target,
+                devices=None,  # Auto-detect local GPUs
+            )
+
+            # Create sender (uses delegation client for generation, local controller for validation)
             self.pow_sender = Sender(
                 url=init_request.url,
                 generation_queue=self.pow_controller.generated_batch_queue,
-                validation_queue=None,  # No validation in delegation mode
-                phase=None,  # No phase in delegation mode
+                validation_queue=self.local_controller.validated_batch_queue,
+                phase=self.local_controller.phase,  # Use local controller's phase
                 r_target=init_request.r_target,
                 fraud_threshold=init_request.fraud_threshold,
+                using_delegation=True,  # Enable hybrid delegation mode
             )
 
         else:
@@ -156,13 +172,20 @@ class PowManager(IManager):
     def _start(self):
         if self.pow_controller is None:
             raise Exception("PoW not initialized")
-        
+
         if self.pow_controller.is_running():
             raise Exception("PoW is already running")
 
-
         logger.info(f"Starting controller with params: {self.init_request}")
+
+        # Start delegation client (for generation)
         self.pow_controller.start()
+
+        # In delegation mode, also start local controller (for validation)
+        if self._using_delegation and self.local_controller:
+            logger.info("Starting local controller for validation")
+            self.local_controller.start()
+
         self.pow_sender.start()
 
     def get_pow_status(self) -> dict:
@@ -192,8 +215,15 @@ class PowManager(IManager):
         }
 
     def _stop(self):
+        # Stop delegation client (for generation)
         self.pow_controller.stop()
-        self.pow_sender.stop()
+
+        # In delegation mode, also stop local controller (for validation)
+        if self._using_delegation and self.local_controller:
+            logger.info("Stopping local controller")
+            self.local_controller.stop()
+
+        # Stop sender
         self.pow_sender.stop()
         self.pow_sender.join(timeout=5)
 
@@ -201,6 +231,7 @@ class PowManager(IManager):
             logger.warning("Sender process did not stop within the timeout period")
 
         self.pow_controller = None
+        self.local_controller = None
         self.pow_sender = None
         self.init_request = None
 
@@ -216,7 +247,18 @@ class PowManager(IManager):
             return PowState.IDLE
 
     def is_running(self) -> bool:
-        return self.pow_controller is not None and self.pow_controller.is_running()
+        if self.pow_controller is None:
+            return False
+        # In delegation mode, also check local controller if it's supposed to be running
+        if self._using_delegation and self.local_controller:
+            # Both controllers should be running
+            return self.pow_controller.is_running() and self.local_controller.is_running()
+        return self.pow_controller.is_running()
 
     def _is_healthy(self) -> bool:
-        return self.pow_controller is not None and self.pow_controller.is_alive()
+        if self.pow_controller is None:
+            return False
+        # In delegation mode, check both controllers
+        if self._using_delegation and self.local_controller:
+            return self.pow_controller.is_alive() and self.local_controller.is_alive()
+        return self.pow_controller.is_alive()

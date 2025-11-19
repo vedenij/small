@@ -64,14 +64,25 @@ async def init_validate(
     request: Request,
     init_request: PowInitRequestUrl
 ):
-    # Validation not supported in delegation mode
-    if os.getenv("DELEGATION_ENABLED", "0") == "1":
-        raise HTTPException(
-            status_code=400,
-            detail="Validation phase not supported in delegation mode"
-        )
-
     manager: PowManager = request.app.state.pow_manager
+
+    # In delegation mode, use local controller for validation
+    if manager._using_delegation:
+        if not manager.local_controller:
+            raise HTTPException(
+                status_code=400,
+                detail="Local controller not initialized for validation"
+            )
+        if not manager.local_controller.is_running():
+            # Start local controller if not running
+            manager.local_controller.start()
+        manager.local_controller.start_validate()
+        return {
+            "status": "OK",
+            "pow_status": manager.get_pow_status()
+        }
+
+    # Normal mode (no delegation)
     if not manager.is_running():
         manager.switch_to_pow(init_request)
 
@@ -115,13 +126,22 @@ async def start_generate(request: Request):
 async def start_validate(request: Request):
     manager: PowManager = request.app.state.pow_manager
 
-    # Validation not supported in delegation mode
+    # In delegation mode, use local controller for validation
     if manager._using_delegation:
-        raise HTTPException(
-            status_code=400,
-            detail="Validation phase not supported in delegation mode"
-        )
+        if not manager.local_controller:
+            raise HTTPException(
+                status_code=400,
+                detail="Local controller not initialized for validation"
+            )
+        if not manager.local_controller.is_running():
+            manager.local_controller.start()
+        manager.local_controller.start_validate()
+        return {
+            "status": "OK",
+            "pow_status": manager.get_pow_status()
+        }
 
+    # Normal mode
     if not manager.is_running():
         raise HTTPException(
             status_code=400,
@@ -144,13 +164,23 @@ async def validate(
 ):
     manager: PowManager = request.app.state.pow_manager
 
-    # Validation not supported in delegation mode
+    # In delegation mode, use local controller for validation
     if manager._using_delegation:
-        raise HTTPException(
-            status_code=400,
-            detail="Validation not supported in delegation mode"
-        )
+        if not manager.local_controller:
+            raise HTTPException(
+                status_code=400,
+                detail="Local controller not initialized for validation"
+            )
+        if not manager.local_controller.is_running():
+            raise HTTPException(
+                status_code=400,
+                detail="Local controller is not running"
+            )
+        manager.local_controller.to_validate(proof_batch)
+        manager.pow_sender.in_validation_queue.put(proof_batch)
+        return {"status": "OK"}
 
+    # Normal mode
     if not manager.is_running():
         raise HTTPException(
             status_code=400,
