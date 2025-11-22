@@ -235,9 +235,6 @@ class PowManager(IManager):
         self.pow_sender = None
         self.init_request = None
 
-        # Clean GPU memory after stopping PoC
-        self._cleanup_gpu()
-
     @staticmethod
     def phase_to_state(phase: Phase) -> PowState:
         if phase == Phase.IDLE:
@@ -265,62 +262,3 @@ class PowManager(IManager):
         if self._using_delegation and self.local_controller:
             return self.pow_controller.is_alive() and self.local_controller.is_alive()
         return self.pow_controller.is_alive()
-
-    def _cleanup_gpu(self, target_free_mib=41000, timeout=10.0):
-        """
-        Clean GPU memory after PoC stops, before vLLM starts.
-        Waits for at least 41000 MiB (40GB) to be free for qwen model.
-        Uses active waiting with 100ms checks for maximum efficiency.
-        """
-        import torch
-        import gc
-        import time
-
-        logger.info("Cleaning GPU memory after PoC...")
-
-        # Destroy PyTorch Distributed process group (NCCL) if exists
-        try:
-            import torch.distributed as dist
-            if dist.is_initialized():
-                logger.info("Destroying PyTorch Distributed process group...")
-                dist.destroy_process_group()
-        except Exception as e:
-            logger.debug(f"Could not destroy process group: {e}")
-
-        # Clear CUDA cache and IPC memory
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
-
-        # Python garbage collection
-        gc.collect()
-
-        # Wait for GPU memory to be released (active waiting)
-        if torch.cuda.is_available():
-            logger.info(f"Waiting for at least {target_free_mib} MiB GPU memory to be free...")
-            start_time = time.time()
-
-            while time.time() - start_time < timeout:
-                try:
-                    free_bytes, _ = torch.cuda.mem_get_info(0)
-                    free_mib = free_bytes / (1024**2)
-
-                    if free_mib >= target_free_mib:
-                        elapsed = time.time() - start_time
-                        logger.info(f"GPU memory released: {free_mib:.0f} MiB free (took {elapsed:.1f}s)")
-                        return
-
-                    time.sleep(0.1)  # Check every 100ms for max efficiency
-                except Exception as e:
-                    logger.warning(f"Error checking GPU memory: {e}")
-                    break
-
-            # Timeout reached
-            try:
-                free_bytes, _ = torch.cuda.mem_get_info(0)
-                free_mib = free_bytes / (1024**2)
-                logger.warning(f"Timeout after {timeout}s. Current free: {free_mib:.0f} MiB")
-            except:
-                pass
-        else:
-            logger.info("GPU cleanup complete (no CUDA available)")
