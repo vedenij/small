@@ -68,14 +68,19 @@ async def init_validate(
 
     # In delegation mode, use local controller for validation
     if manager._using_delegation:
+        # Ensure local controller is initialized (lazy initialization)
+        manager._ensure_local_controller()
+
         if not manager.local_controller:
             raise HTTPException(
                 status_code=400,
-                detail="Local controller not initialized for validation"
+                detail="Failed to initialize local controller for validation"
             )
         if not manager.local_controller.is_running():
-            # Start local controller if not running
-            manager.local_controller.start()
+            raise HTTPException(
+                status_code=400,
+                detail="Local controller is not running"
+            )
         manager.local_controller.start_validate()
         return {
             "status": "OK",

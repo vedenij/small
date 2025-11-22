@@ -117,26 +117,17 @@ class PowManager(IManager):
             )
             self._using_delegation = True
 
-            # Create LOCAL controller for validation (on small node's GPU)
-            logger.info("Creating local ParallelController for validation")
-            self.local_controller = ParallelController(
-                params=init_request.params,
-                block_hash=init_request.block_hash,
-                block_height=init_request.block_height,
-                public_key=init_request.public_key,
-                node_id=init_request.node_id,
-                node_count=init_request.node_count,
-                batch_size=init_request.batch_size,
-                r_target=init_request.r_target,
-                devices=None,  # Auto-detect local GPUs
-            )
+            # NOTE: Local controller for validation will be created lazily
+            # when first validation is requested to avoid CUDA issues after vLLM shutdown
+            logger.info("Delegation mode enabled - local controller will be created on demand")
 
-            # Create sender (uses delegation client for generation, local controller for validation)
+            # Create sender (uses delegation client for generation)
+            # Note: validation_queue will be set later when local controller is created
             self.pow_sender = Sender(
                 url=init_request.url,
                 generation_queue=self.pow_controller.generated_batch_queue,
-                validation_queue=self.local_controller.validated_batch_queue,
-                phase=self.local_controller.phase,  # Use local controller's phase
+                validation_queue=None,  # Will be set when local controller is created
+                phase=None,  # Will be set when local controller is created
                 r_target=init_request.r_target,
                 fraud_threshold=init_request.fraud_threshold,
                 using_delegation=True,  # Enable hybrid delegation mode
@@ -181,10 +172,8 @@ class PowManager(IManager):
         # Start delegation client (for generation)
         self.pow_controller.start()
 
-        # In delegation mode, also start local controller (for validation)
-        if self._using_delegation and self.local_controller:
-            logger.info("Starting local controller for validation")
-            self.local_controller.start()
+        # In delegation mode, local controller will be started on demand
+        # when validation is first requested
 
         self.pow_sender.start()
 
@@ -234,6 +223,38 @@ class PowManager(IManager):
         self.local_controller = None
         self.pow_sender = None
         self.init_request = None
+        self._using_delegation = False
+
+    def _ensure_local_controller(self):
+        """Lazy initialization of local controller for validation in delegation mode."""
+        if self._using_delegation and self.local_controller is None:
+            logger.info("Lazy initialization: Creating local ParallelController for validation")
+
+            # Create local controller for validation
+            # Pass explicit device to skip CUDA check in main process
+            # The actual CUDA check will happen in child process
+            self.local_controller = ParallelController(
+                params=self.init_request.params,
+                block_hash=self.init_request.block_hash,
+                block_height=self.init_request.block_height,
+                public_key=self.init_request.public_key,
+                node_id=self.init_request.node_id,
+                node_count=self.init_request.node_count,
+                batch_size=self.init_request.batch_size,
+                r_target=self.init_request.r_target,
+                devices=['cuda:0'],  # Use only first GPU, skip create_gpu_groups() in main process
+            )
+
+            # Update sender with local controller's queues
+            if self.pow_sender:
+                self.pow_sender.validation_queue = self.local_controller.validated_batch_queue
+                self.pow_sender.phase = self.local_controller.phase
+                logger.info("Updated sender with local controller's validation queue")
+
+            # Start local controller if main controller is already running
+            if self.pow_controller and self.pow_controller.is_running():
+                logger.info("Starting local controller for validation")
+                self.local_controller.start()
 
     @staticmethod
     def phase_to_state(phase: Phase) -> PowState:

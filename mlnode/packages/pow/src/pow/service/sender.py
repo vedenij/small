@@ -110,6 +110,8 @@ class Sender(Process):
         return ProofBatch.merge(batches_from_queue)
 
     def _get_validated(self) -> List[ValidatedBatch]:
+        if self.validation_queue is None:
+            return []
         batches = Controller.get_from_queue(self.validation_queue)
         in_validation = self._get_in_validation()
         for batch in batches:
